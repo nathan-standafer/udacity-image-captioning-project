@@ -63,7 +63,7 @@ class DecoderRNN(nn.Module):
 
         x = self.word_embeddings(captions)
         #print("x.shape after passing through word embeddings: {}".format(x.shape))  #torch.Size([10, 13, 256])
-
+        #print("word embeddings out [0]: {}".format(x))
         
         # get the output and hidden state by passing the lstm over our word embeddings
         # the lstm takes in our embeddings and hiddent state
@@ -76,9 +76,14 @@ class DecoderRNN(nn.Module):
         #  x.shape:        torch.Size([10, 13, 256])
         features_reshaped = torch.reshape(features, (features.shape[0], 1, features.shape[1]))
         #print("DecoderRNN - features_reshaped.shape: {}".format(features_reshaped.shape))
+        #print("DecoderRNN - x.shape: {}".format(x.shape))
+        #print("feature reshaped[:][0][:] : {}".format(features_reshaped))
         x = torch.cat((features_reshaped, x), dim=1)
-        #print("DecoderRNN - x.shape after catenation: {}".format(x.shape))
 
+
+        #print("DecoderRNN - x.shape after catenation: {}".format(x.shape))
+        #print("catenated x[1] - should match word embeddings out [0]: {}".format(x))
+        #print("catenated x[2][0][:] - should match features: {}".format(x[2][0][:]))
 
         hidden = self.init_hidden(sentence_length+1)
 
@@ -97,34 +102,52 @@ class DecoderRNN(nn.Module):
         fc_outputs = self.hidden2tag(lstm_out_contiguous)
         #print("fc_outputs.shape: {}".format(fc_outputs.shape))
 
-        outputs = fc_outputs.view(batch_size, -1, self.vocab_size) 
+        outputs = fc_outputs.reshape(batch_size, -1, self.vocab_size) 
         #print("outputs.shape: {}".format(outputs.shape))
 
         #remove first output word:
-        outputs = outputs[:,1:,:]
+        #outputs = outputs[:,1:,:]
 
-        outputs_scores = F.log_softmax(outputs, dim=2)
-        return outputs_scores
+        #remove lastt output word:
+        outputs = outputs[:,:-1,:]
+
+        #outputs_scores = F.log_softmax(outputs, dim=2) #pass raw logits to nn.CrossEntropyLoss,
+
+        # print("outputs.shape: {}".format(outputs.shape))
+        # print("outputs_scores.shape: {}".format(outputs_scores.shape))
+
+        #print("pass raw logits to nn.CrossEntropyLoss")
+        return outputs
         
 
     def sample(self, inputs, states=None, max_len=20):
         " accepts pre-processed image tensor (inputs) and returns predicted sentence (list of tensor ids of length max_len) "
-        print("sample inputs.shape: {}".format(inputs.shape))
-        print("sample inputs[0]: {}".format(inputs[0]))
+        #print("sample inputs.shape: {}".format(inputs.shape))
+        #print("sample inputs[0]: {}".format(inputs[0]))
 
         captions_np = np.zeros([inputs.shape[0], 1])
         captions = torch.from_numpy(captions_np).type(torch.LongTensor).to("cuda")
 
         output = self.forward(inputs[0], captions)
-
         output_np = output.cpu().detach().numpy()
-        probs = np.exp(output_np)
-        print("probs:  {}".format(probs))
+
+        print("output_np:  {}".format(output_np))
         output_list = [0]
 
         for i in range(max_len):
-            next_word = np.argmax( probs[0,-1][1:] ) #largest index that isn't index 0
-            #print("next_word: {}".format(next_word))
+            next_word = 1 + np.argmax(output_np[0,-1][1:] ) #largest index that isn't index 0
+            #next_word = np.argmax( output_np[0, -1] ) #largest index that isn't index 0
+
+            #print("next_word: {}, value: {}".format(next_word, output_np[0,-1][1:][next_word-1]  ))
+            #print("next_word: {}, value: {}".format(next_word, output_np[0,-1][1:][next_word-1]  ))
+
+
+            i = 0
+            for val in output_np[0,-1]:
+                #print("val[{}]: {}".format(i, val))
+                i = i + 1
+                if i < 100:
+                    break
 
             captions_np = np.append(captions_np, [[next_word]], axis=1)
             captions = torch.from_numpy(captions_np).type(torch.LongTensor).to("cuda")
@@ -132,7 +155,7 @@ class DecoderRNN(nn.Module):
             #print("current captions: {}".format(captions))
             output = self.forward(inputs[0], captions)
             output_np = output.cpu().detach().numpy()
-            probs = np.exp(output_np)
+            #print("output_np:  {}".format(output_np))
 
             output_list.append(int(next_word))
 
