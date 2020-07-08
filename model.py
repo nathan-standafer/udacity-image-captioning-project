@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 import numpy as np
-
+import random
 
 
 class EncoderCNN(nn.Module):
@@ -125,38 +125,47 @@ class DecoderRNN(nn.Module):
         #print("sample inputs.shape: {}".format(inputs.shape))
         #print("sample inputs[0]: {}".format(inputs[0]))
 
-        captions_np = np.zeros([inputs.shape[0], 1])
-        captions = torch.from_numpy(captions_np).type(torch.LongTensor).to("cuda")
-
-        output = self.forward(inputs[0], captions)
-        output_np = output.cpu().detach().numpy()
-
-        print("output_np:  {}".format(output_np))
-        output_list = [0]
-
-        for i in range(max_len):
-            next_word = 1 + np.argmax(output_np[0,-1][1:] ) #largest index that isn't index 0
-            #next_word = np.argmax( output_np[0, -1] ) #largest index that isn't index 0
-
-            #print("next_word: {}, value: {}".format(next_word, output_np[0,-1][1:][next_word-1]  ))
-            #print("next_word: {}, value: {}".format(next_word, output_np[0,-1][1:][next_word-1]  ))
-
-
-            i = 0
-            for val in output_np[0,-1]:
-                #print("val[{}]: {}".format(i, val))
-                i = i + 1
-                if i < 100:
-                    break
-
-            captions_np = np.append(captions_np, [[next_word]], axis=1)
+        top_x_words_to_use = 2
+        attempts = 20
+        best_score = -10000
+        output_list_to_return = []
+        
+        for attempt in range(attempts):
+            captions_np = np.zeros([inputs.shape[0], 1])
             captions = torch.from_numpy(captions_np).type(torch.LongTensor).to("cuda")
 
-            #print("current captions: {}".format(captions))
             output = self.forward(inputs[0], captions)
             output_np = output.cpu().detach().numpy()
+
             #print("output_np:  {}".format(output_np))
+            output_list = [0]
+            score_total = 0
 
-            output_list.append(int(next_word))
+            for i in range(max_len):
+                top_five_words = np.argpartition(output_np[0,-1], -top_x_words_to_use)[-top_x_words_to_use:]
+                #print("top_five_words: {}".format(top_five_words))
+                next_word = top_five_words[random.randint(0, top_x_words_to_use-1)]
+                score_total += output_np[0,-1][next_word]
 
-        return output_list
+                #next_word = 1 + np.argmax(output_np[0,-1][1:] ) #largest index that isn't index 0
+                #next_word = np.argmax( output_np[0, -1] ) #largest index that isn't index 0
+
+                #print("next_word: {}, value: {}".format(next_word, output_np[0,-1][1:][next_word-1]  ))
+                #print("next_word: {}, value: {}".format(next_word, output_np[0,-1][1:][next_word-1]  ))
+
+                captions_np = np.append(captions_np, [[next_word]], axis=1)
+                captions = torch.from_numpy(captions_np).type(torch.LongTensor).to("cuda")
+
+                #print("\ncurrent captions.shape: {}".format(captions.shape))
+                output = self.forward(inputs[0], captions)
+                output_np = output.cpu().detach().numpy()
+                #print("output_np.shape:  {}".format(output_np.shape))
+
+                output_list.append(int(next_word))
+            
+            if score_total > best_score:
+                output_list_to_return = output_list
+
+            print("score total: {}".format(score_total))
+            
+        return output_list_to_return
