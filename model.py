@@ -61,7 +61,7 @@ class DecoderRNN(nn.Module):
 
         # ??? should I concatenate the features and captions before feeding into the LSTM?????
 
-        x = self.word_embeddings(captions)
+        x = self.word_embeddings(captions[:,:-1])  #take off the last word (<end>)
         #print("x.shape after passing through word embeddings: {}".format(x.shape))  #torch.Size([10, 13, 256])
         #print("word embeddings out [0]: {}".format(x))
         
@@ -85,9 +85,9 @@ class DecoderRNN(nn.Module):
         #print("catenated x[1] - should match word embeddings out [0]: {}".format(x))
         #print("catenated x[2][0][:] - should match features: {}".format(x[2][0][:]))
 
-        hidden = self.init_hidden(sentence_length+1)
+        #hidden = self.init_hidden(sentence_length+1)
 
-        lstm_out, hidden = self.lstm(x, hidden)
+        lstm_out, _ = self.lstm(x)
         
         #outputs should be a PyTorch tensor with size [batch_size, captions.shape[1], vocab_size]
         #Your output should be designed such that outputs[i,j,k] contains the model's predicted score
@@ -96,20 +96,20 @@ class DecoderRNN(nn.Module):
         #??? how to feed outut of RNN into linear layber(s).  Do I just 
         #print("lstm_out.shape: {}".format(lstm_out.shape))
         # shape output to be (batch_size*seq_length, hidden_dim)
-        lstm_out_contiguous = lstm_out.contiguous().view(-1, self.hidden_size)
+        #lstm_out_contiguous = lstm_out.contiguous().view(-1, self.hidden_size)
         #print("lstm_out_contiguous.shape: {}".format(lstm_out_contiguous.shape))
 
-        fc_outputs = self.hidden2tag(lstm_out_contiguous)
+        fc_outputs = self.hidden2tag(lstm_out)
         #print("fc_outputs.shape: {}".format(fc_outputs.shape))
 
-        outputs = fc_outputs.reshape(batch_size, -1, self.vocab_size) 
+        #outputs = fc_outputs.reshape(batch_size, -1, self.vocab_size) 
         #print("outputs.shape: {}".format(outputs.shape))
 
         #remove first output word:
         #outputs = outputs[:,1:,:]
 
         #remove lastt output word:
-        outputs = outputs[:,:-1,:]
+        #outputs = outputs[:,:-1,:]  #I took off the last word of the incoming caption, so no need to remove it here.
 
         #outputs_scores = F.log_softmax(outputs, dim=2) #pass raw logits to nn.CrossEntropyLoss,
 
@@ -117,7 +117,7 @@ class DecoderRNN(nn.Module):
         # print("outputs_scores.shape: {}".format(outputs_scores.shape))
 
         #print("pass raw logits to nn.CrossEntropyLoss")
-        return outputs
+        return fc_outputs
         
 
     def sample(self, inputs, states=None, max_len=20):
@@ -125,7 +125,7 @@ class DecoderRNN(nn.Module):
         #print("sample inputs.shape: {}".format(inputs.shape))
         #print("sample inputs[0]: {}".format(inputs[0]))
 
-        top_x_words_to_use = 2
+        top_x_words_to_use = 3
         attempts = 20
         best_score = -10000
         output_list_to_return = []
