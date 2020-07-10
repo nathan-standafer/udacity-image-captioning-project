@@ -38,7 +38,7 @@ class DecoderRNN(nn.Module):
         # embedding layer that turns words into a vector of a specified size
         self.word_embeddings = nn.Embedding(vocab_size, embed_size)
         
-        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers)
+        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True)
         
         # the linear layer that maps the hidden state output dimension 
         self.hidden2tag = nn.Linear(hidden_size, vocab_size)
@@ -74,7 +74,8 @@ class DecoderRNN(nn.Module):
         #now, I meed to inject the image encodings (features) into the ltsm along with the output from the embeddings.
         #  features.shape: torch.Size([10, 256])
         #  x.shape:        torch.Size([10, 13, 256])
-        features_reshaped = torch.reshape(features, (features.shape[0], 1, features.shape[1]))
+        #features_reshaped = torch.reshape(features, (features.shape[0], 1, features.shape[1]))
+        features_reshaped = features.unsqueeze(dim=1)
         #print("DecoderRNN - features_reshaped.shape: {}".format(features_reshaped.shape))
         #print("DecoderRNN - x.shape: {}".format(x.shape))
         #print("feature reshaped[:][0][:] : {}".format(features_reshaped))
@@ -120,13 +121,13 @@ class DecoderRNN(nn.Module):
         return fc_outputs
         
 
-    def sample(self, inputs, states=None, max_len=20):
+    def sample(self, inputs, states=None, max_len=30):
         " accepts pre-processed image tensor (inputs) and returns predicted sentence (list of tensor ids of length max_len) "
         #print("sample inputs.shape: {}".format(inputs.shape))
         #print("sample inputs[0]: {}".format(inputs[0]))
 
-        top_x_words_to_use = 3
-        attempts = 20
+        top_x_words_to_use = 2
+        attempts = 10
         best_score = -10000
         output_list_to_return = []
         
@@ -138,7 +139,7 @@ class DecoderRNN(nn.Module):
             output_np = output.cpu().detach().numpy()
 
             #print("output_np:  {}".format(output_np))
-            output_list = [0]
+            output_list = []
             score_total = 0
 
             for i in range(max_len):
@@ -162,10 +163,15 @@ class DecoderRNN(nn.Module):
                 #print("output_np.shape:  {}".format(output_np.shape))
 
                 output_list.append(int(next_word))
+
+                if next_word == 1:
+                    break
             
             if score_total > best_score:
                 output_list_to_return = output_list
+                best_score = score_total
+                #print("best_score: {}".format(best_score))
 
-            print("score total: {}".format(score_total))
+        #print("best_score: {}".format(best_score))
             
         return output_list_to_return
